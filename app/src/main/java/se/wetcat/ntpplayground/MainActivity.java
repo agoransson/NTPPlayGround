@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
 
+import java.net.InetAddress;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Observable;
@@ -122,13 +123,34 @@ public class MainActivity extends ScreenHandlingActivity {
 
         long time = 0L;
 
-        if (client.requestTime(getString(R.string.ntp_server), getResources().getInteger(R.integer.ntp_timeout))) {
-            time = client.getNtpTime() + SystemClock.elapsedRealtime() - client.getNtpTimeReference();
-        } else {
+        try {
+            ensureDns();
+
+            if (client.requestTime(getString(R.string.ntp_server), getResources().getInteger(R.integer.ntp_timeout))) {
+                time = client.getNtpTime() + SystemClock.elapsedRealtime() - client.getNtpTimeReference();
+            } else {
+                time = System.currentTimeMillis();
+            }
+        } catch (InterruptedException e) {
             time = System.currentTimeMillis();
         }
 
         return time;
+    }
+
+    /**
+     * A method that should, theoretically, timeout the dns quicker than it normally would. It will
+     * leave a thread as a short-term memory leak though, but for the user this will mean quicker
+     * response.
+     *
+     * @throws InterruptedException
+     */
+    private void ensureDns() throws InterruptedException {
+        DnsResolver dnsRes = new DnsResolver(getString(R.string.ntp_server));
+        Thread t = new Thread(dnsRes);
+        t.start();
+        t.join(1000);
+        InetAddress inetAddr = dnsRes.get();
     }
 
 }
